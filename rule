@@ -1,0 +1,82 @@
+rule:
+  id: "SQL_INJECTION_001"
+  name: "SQL Injection via String Concatenation"
+  description: "Detects potential SQL injection vulnerabilities when user input is directly concatenated into SQL queries"
+  severity: "CRITICAL"
+  category: "sql-injection"
+  language: "php"
+  
+patterns:
+  primary:
+    - pattern: |
+        $_(GET|POST|REQUEST|COOKIE)\[.*\]\s*\.\s*.*\s*\.\s*\$(GET|POST|REQUEST|COOKIE)\[.*\]|
+        \$(GET|POST|REQUEST|COOKIE)\[.*\]\s*\.\s*.*
+    message: "User input directly concatenated into string context"
+    
+  sink:
+    - pattern: |
+        (mysql_query|mysqli_query|pg_query|execute|query|exec)\s*\(\s*.*\$(GET|POST|REQUEST|COOKIE).*
+    message: "User input used in database query execution"
+    
+  source:
+    - pattern: |
+        \$(GET|POST|REQUEST|COOKIE|SERVER)\[.*\]
+    message: "Untrusted user input source"
+    
+  sanitization:
+    - pattern: |
+        (mysql_real_escape_string|mysqli_real_escape_string|pg_escape_string|addslashes|htmlspecialchars|intval|floatval)\s*\(\s*\$(GET|POST|REQUEST|COOKIE)
+    message: "Input sanitization function applied"
+    negate: true
+
+data_flow:
+  sources: 
+    - "$_GET"
+    - "$_POST" 
+    - "$_REQUEST"
+    - "$_COOKIE"
+    - "$_SERVER"
+    
+  sinks:
+    - "mysql_query"
+    - "mysqli_query"
+    - "pg_query"
+    - "PDO::query"
+    - "PDO::exec"
+    - "execute"
+    
+  sanitizers:
+    - "mysql_real_escape_string"
+    - "mysqli_real_escape_string"
+    - "pg_escape_string"
+    - "addslashes"
+    - "htmlspecialchars"
+    - "intval"
+    - "floatval"
+    - "prepare"
+
+conditions:
+  - condition: "source_flows_to_sink"
+    required: true
+    
+  - condition: "no_sanitization_between"
+    required: false
+    
+  - condition: "string_concatenation_used"
+    required: true
+
+metadata:
+  cwe: "CWE-89"
+  owasp: "A1:2017-Injection"
+  confidence: "HIGH"
+  impact: "HIGH"
+  likelihood: "HIGH"
+  
+remediation:
+  description: "Use prepared statements with parameterized queries instead of string concatenation"
+  example_bad: |
+    $query = "SELECT * FROM users WHERE id = " . $_GET['id'];
+    mysql_query($query);
+  example_good: |
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE id = :id");
+    $stmt->execute(['id' => $_GET['id']]);
