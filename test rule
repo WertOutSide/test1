@@ -1,0 +1,106 @@
+<?php
+// VULNERABLE USER PROFILE MANAGEMENT
+class UserProfile {
+    private $conn;
+    
+    public function __construct() {
+        $this->conn = new mysqli("localhost", "admin", "password", "users_db");
+    }
+    
+    // CRITICAL: SQL Injection via direct concatenation
+    public function getUserById($userId) {
+        // Уязвимость: пользовательский ввод напрямую в запрос
+        $query = "SELECT * FROM users WHERE id = " . $userId;
+        return $this->conn->query($query);
+    }
+    
+    // CRITICAL: SQL Injection with GET parameter
+    public function getUserByGetParameter() {
+        $userId = $_GET['user_id']; // Небезопасный источник
+        $query = "SELECT username, email FROM users WHERE id = '$userId'";
+        return mysqli_query($this->conn, $query);
+    }
+    
+    // CRITICAL: Multiple user inputs concatenated
+    public function searchUsers() {
+        $name = $_POST['name'];
+        $email = $_POST['email'];
+        
+        // Уязвимость: несколько входных параметров
+        $query = "SELECT * FROM users WHERE name LIKE '%$name%' AND email = '$email'";
+        return $this->conn->query($query);
+    }
+    
+    // CRITICAL: Order by injection
+    public function getUsersSorted() {
+        $sort = $_GET['sort'] ?? 'id';
+        $order = $_GET['order'] ?? 'ASC';
+        
+        // Уязвимость: параметры сортировки из пользовательского ввода
+        $query = "SELECT * FROM users ORDER BY $sort $order";
+        return mysqli_query($this->conn, $query);
+    }
+    
+    // CRITICAL: UPDATE injection
+    public function updateUserProfile() {
+        $userId = $_POST['user_id'];
+        $newEmail = $_POST['email'];
+        
+        // Уязвимость в UPDATE запросе
+        $query = "UPDATE users SET email = '$newEmail' WHERE id = $userId";
+        return $this->conn->query($query);
+    }
+    
+    // CRITICAL: DELETE injection  
+    public function deleteUser() {
+        $userId = $_GET['delete_id'];
+        
+        // Уязвимость в DELETE запросе
+        $query = "DELETE FROM users WHERE id = " . $userId;
+        return mysqli_query($this->conn, $query);
+    }
+    
+    // INSECURE: Partial sanitization (still vulnerable)
+    public function partiallySanitizedQuery() {
+        $username = $_GET['username'];
+        $password = $_GET['password'];
+        
+        // addslashes недостаточно для защиты
+        $safeUsername = addslashes($username);
+        
+        // Пароль не санитизирован!
+        $query = "SELECT * FROM users WHERE username = '$safeUsername' AND password = '$password'";
+        return $this->conn->query($query);
+    }
+    
+    // FALSE POSITIVE TEST: Properly secured with prepared statements
+    public function safeGetUserById($userId) {
+        $stmt = $this->conn->prepare("SELECT * FROM users WHERE id = ?");
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        return $stmt->get_result();
+    }
+    
+    // FALSE POSITIVE TEST: Proper input validation
+    public function safeGetUserByInteger() {
+        $userId = intval($_GET['user_id']); // Правильная валидация
+        $query = "SELECT * FROM users WHERE id = $userId";
+        return $this->conn->query($query);
+    }
+}
+
+// USAGE EXAMPLES (vulnerable)
+$profile = new UserProfile();
+
+// Уязвимые вызовы
+$user = $profile->getUserById($_GET['id']);
+$users = $profile->getUserByGetParameter();
+$search = $profile->searchUsers();
+$sorted = $profile->getUsersSorted();
+$updated = $profile->updateUserProfile();
+$deleted = $profile->deleteUser();
+
+// Безопасные вызовы (не должны детектироваться как уязвимости)
+$safeUser = $profile->safeGetUserById(123);
+$validatedUser = $profile->safeGetUserByInteger();
+?>
