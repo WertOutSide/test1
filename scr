@@ -1,0 +1,33 @@
+# !/bin/bash
+# Create dir
+mkdir -p ~/certs
+cd ~/certs
+# Create file config
+cat <<EOF > domains.ext
+authorityKeyIdentifier=keyid,issuer
+basicConstraints=CA:FALSE
+keyUsage = digitalSignature, nonRepudiation,
+keyEncipherment, dataEncipherment
+EOF
+# Generate CA key and cert
+openssl genrsa -out server_ca.key 2048
+openssl req -new -x509 -nodes -days 365 -key
+server_ca.key -out server_ca.crt -subj
+"/O=CyberProtect LLC/OU=Domain Controllers/CN=WINSRV.au.team"
+# Generate server key
+openssl req -newkey rsa:2048 -nodes -keyout server.key
+-out server.req -subj
+"/O=CyberProtect LLC/OU=Domain Controllers/CN=WINSRV.au.team"
+openssl x509 -req -in server.req -days 365 -CA
+server_ca.crt -CAkey server_ca.key -set_serial
+01 -out server.crt -extfile domains.ext
+# Generate client key and cert
+openssl req -new -x509 -nodes -days 365 -keyout
+client_ca.key -out client_ca.crt -subj
+"/O=CyberProtect LLC/CN=ALT-CLI.au.team"
+openssl req -newkey rsa:2048 -nodes -keyout client.key
+-out client.req -subj
+"/O=CyberProtect LLC/CN=ALT-CLI.au.team "
+openssl x509 -req -in client.req -days 365 -CA
+server_ca.crt -CAkey server_ca.key -set_serial 01
+-out client.crt -extfile domains.ext
